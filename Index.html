@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vendicometro</title>
+<style>
+  :root { --bg:#1c1226; --panel:#2a1b38; --ink:#f6ecff; --muted:#b7a3cc;
+          --hot:#ff3d57; --cool:#4cc9f0; --gold:#ffc43d; --level:100; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
+         font-family:system-ui,sans-serif; display:flex; flex-direction:column;
+         align-items:center; padding:28px 20px 40px; gap:20px; }
+  h1 { font-size:2rem; margin:0; }
+  .sub { color:var(--muted); margin:-12px 0 0; text-align:center; }
+  .wrap { display:flex; flex-direction:column; align-items:center; }
+  .row { display:flex; align-items:flex-end; gap:14px; }
+  .tube { position:relative; width:76px; height:320px; background:var(--panel);
+          border:3px solid #4a3562; border-bottom:0; border-radius:38px 38px 0 0; overflow:hidden; }
+  .mercury { position:absolute; left:0; right:0; bottom:0; height:calc(var(--level)*1%);
+             background:linear-gradient(to top,var(--hot),color-mix(in srgb,var(--hot) calc(var(--level)*1%),var(--cool)));
+             transition:height .8s cubic-bezier(.3,1.4,.5,1); }
+  .ticks { display:flex; flex-direction:column; justify-content:space-between;
+           height:320px; color:var(--muted); font-size:.85rem; }
+  .bulb { width:112px; height:112px; border-radius:50%; background:var(--hot);
+          border:3px solid #4a3562; margin-top:-6px; }
+  .readout { text-align:center; }
+  .readout b { font-size:3rem; line-height:1; }
+  .readout span { display:block; color:var(--muted); margin-top:4px; }
+  button { font:inherit; font-weight:800; font-size:1.15rem; background:var(--gold);
+           color:#3a2600; border:0; border-radius:999px; padding:16px 30px;
+           min-width:240px; cursor:pointer; box-shadow:0 5px 0 #b3841c; }
+  button:active { transform:translateY(4px); box-shadow:0 1px 0 #b3841c; }
+  button:disabled { opacity:.5; }
+  .msg { min-height:1.4em; color:var(--muted); text-align:center; max-width:320px; }
+  .coin { position:fixed; top:0; left:50%; width:34px; height:34px; margin-left:-17px;
+          border-radius:50%; background:var(--gold); border:3px solid #b3841c;
+          pointer-events:none; animation:drop .7s ease-in forwards; }
+  @keyframes drop { to { transform:translateY(300px); opacity:0; } }
+  @media (prefers-reduced-motion:reduce) { .mercury{transition:none} .coin{display:none} }
+</style>
+</head>
+<body>
+  <h1>Vendicometro</h1>
+  <p class="sub">Ogni gettone raffredda un po' la vendetta.</p>
+  <div class="wrap">
+    <div class="row">
+      <div class="tube"><div class="mercury"></div></div>
+      <div class="ticks"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div>
+    </div>
+    <div class="bulb"></div>
+  </div>
+  <div class="readout"><b id="livello">–</b><span id="gettoni">Caricamento…</span></div>
+  <button id="btn" disabled>Inserisci un gettone</button>
+  <p class="msg" id="msg"></p>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+  const SUPABASE_URL = "https://frgozzhtcoilnmqcoooy.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_7PNT8goeZGL9zWSUlp8cAw_iMFkKah4";
+
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const $ = (id) => document.getElementById(id);
+  let rowId = null;
+
+  function show(r) {
+    rowId = r.id;
+    document.documentElement.style.setProperty("--level", r.livello);
+    $("livello").textContent = r.livello + "%";
+    $("gettoni").textContent = r.gettoni === 1 ? "1 gettone inserito" : r.gettoni + " gettoni inseriti";
+    $("btn").disabled = r.livello === 0;
+    $("msg").textContent = r.livello === 0 ? "Vendetta spenta. Si può fare pace." : "";
+  }
+
+  async function start() {
+    const { data, error } = await db.from("vendicometro").select("*").limit(1).single();
+    if (error) { $("gettoni").textContent = "Errore di connessione"; $("msg").textContent = error.message; return; }
+    show(data);
+    db.channel("vendicometro")
+      .on("postgres_changes", { event: "*", schema: "public", table: "vendicometro" }, (p) => show(p.new))
+      .subscribe();
+  }
+
+  $("btn").addEventListener("click", async () => {
+    $("btn").disabled = true;
+    const c = document.createElement("div");
+    c.className = "coin";
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 800);
+    const { data, error } = await db.rpc("inserisci_gettone", { p_id: rowId });
+    if (error) { $("msg").textContent = "Errore: " + error.message; $("btn").disabled = false; return; }
+    show(data);
+  });
+
+  start();
+</script>
+</body>
+</html>
