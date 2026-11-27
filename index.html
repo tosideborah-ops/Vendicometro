@@ -82,16 +82,23 @@
   }
 
   $("btn").addEventListener("click", async () => {
+    let pin = localStorage.getItem("pin");
+    if (!pin) { pin = prompt("Codice segreto:"); if (!pin) return; }
     $("btn").disabled = true;
     const c = document.createElement("div");
     c.className = "coin";
     document.body.appendChild(c);
     setTimeout(() => c.remove(), 800);
-    const { data, error } = await db.rpc("inserisci_gettone", { p_id: rowId });
-    if (error) { $("msg").textContent = "Errore: " + error.message; $("btn").disabled = false; return; }
+    const { data, error } = await db.rpc("inserisci_gettone", { p_id: rowId, p_pin: pin });
+    if (error) {
+      localStorage.removeItem("pin");
+      $("msg").textContent = "Codice errato o errore: " + error.message;
+      $("btn").disabled = false;
+      return;
+    }
+    localStorage.setItem("pin", pin);
     show(data);
   });
-
   start();
 </script>
 </body>
